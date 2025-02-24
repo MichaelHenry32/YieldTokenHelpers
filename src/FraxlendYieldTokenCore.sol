@@ -30,6 +30,22 @@ abstract contract FraxlendYieldTokenCore {
         return address(0xBFc4D34Db83553725eC6c768da71D2D9c1456B55);
     }
 
+    function getSfrxUsdAddress() internal view returns (address) {
+        return address(0xfc00000000000000000000000000000000000008);
+    }
+
+    function getSfrxUsdContract() internal view returns (IERC20 SfrxUsdContract) {
+        return IERC20(getSfrxUsdAddress());
+    }
+
+    function getFrxUsdAddress() internal view returns (address) {
+        return address(0xFc00000000000000000000000000000000000001);
+    }
+
+    function getFrxUsdContract() internal view returns (IERC20 SfrxUsdContract) {
+        return IERC20(getFrxUsdAddress());
+    }
+
     function getFraxlendPair() internal view returns (IFraxlendPair pair) {
         return IFraxlendPair(getFraxlendPairAddress());
     }
@@ -44,6 +60,21 @@ abstract contract FraxlendYieldTokenCore {
 
     function previewRedeemSfrxUsd(uint256 sfrxUsdAmount) internal view returns (uint256) {
         return getMinterRedeemer().previewRedeem(sfrxUsdAmount);
+    }
+
+    function approveAndRedeemSfrxUsd(uint256 _sfrxUsdAmount, address _receiver)
+        internal
+        returns (uint256 _amountReceived)
+    {
+        IERC4626 _MinterRedeemer = getMinterRedeemer();
+        IERC20 SfrxUSDContract = getSfrxUsdContract();
+        SfrxUSDContract.approve(address(_MinterRedeemer), _sfrxUsdAmount);
+        _amountReceived = _MinterRedeemer.redeem(_sfrxUsdAmount, _receiver, address(this));
+    }
+
+    function approveSfrxUSDToFraxlend(uint256 _sfrxUsdAmount) internal {
+        IERC20 SfrxUSDContract = getSfrxUsdContract();
+        SfrxUSDContract.approve(getFraxlendPairAddress(), _sfrxUsdAmount);
     }
 
     function convertAndDeposit(uint256 _amount, address _receiver) internal returns (uint256 _sharesReceived) {
@@ -69,18 +100,17 @@ abstract contract FraxlendYieldTokenCore {
 
     function withdrawAndConvert(uint256 _amount, address _receiver, address _owner)
         internal
-        returns (uint256 _sharesToBurn)
+        returns (uint256 _amountToReturn)
     {
+        require(_owner == _receiver, "Owner and Receiver must be identical");
         // address _tokenAddress = fraxlend_pair_address_to_erc20_address[_contractAddress];
         IFraxlendPair _FraxlendPair = getFraxlendPair();
         IERC4626 _MinterRedeemer = getMinterRedeemer();
         uint256 _withdrawStakedTokenAmount = _MinterRedeemer.previewWithdraw(_amount);
         uint256 _withdrawFraxlendShareAmount = _FraxlendPair.previewWithdraw(_withdrawStakedTokenAmount);
-        _sharesToBurn = _FraxlendPair.redeem(_withdrawFraxlendShareAmount, address(this), _owner);
-        if (_sharesToBurn > 0) {
-            IERC20 _StakedTokenContract = IERC20(_FraxlendPair.asset());
-            _StakedTokenContract.approve(address(_MinterRedeemer), _sharesToBurn);
-            uint256 _amountWithdrawn = _MinterRedeemer.redeem(_sharesToBurn, _receiver, address(this));
+        uint256 _amountToReturnSfrxUsd = _FraxlendPair.redeem(_withdrawFraxlendShareAmount, address(this), _owner);
+        if (_amountToReturnSfrxUsd > 0) {
+            _amountToReturn = approveAndRedeemSfrxUsd(_amountToReturnSfrxUsd, _receiver);
         }
     }
 
@@ -373,7 +403,12 @@ abstract contract FraxlendYieldTokenCore {
         );
     function previewDeposit(uint256 _assets) external view returns (uint256 _sharesReceived);
     function previewMint(uint256 _shares) external view returns (uint256 _amount);
-    function previewRedeem(uint256 _shares) external view returns (uint256 _assets);
+
+    function previewRedeem(uint256 _shares) external view returns (uint256 _assets) {
+        uint256 assetsSfrxUsd = getFraxlendPair().previewRedeem(_shares);
+        _assets = getMinterRedeemer().previewRedeem(assetsSfrxUsd);
+    }
+
     function previewWithdraw(uint256 _amount) external view returns (uint256 _sharesToBurn);
     function pricePerShare() external view returns (uint256 _amount);
     function protocolLiquidationFee() external view returns (uint256);
@@ -382,7 +417,21 @@ abstract contract FraxlendYieldTokenCore {
         return getFraxlendPair().rateContract();
     }
 
-    function redeem(uint256 _shares, address _receiver, address _owner) external returns (uint256 _amountToReturn);
+    /* Needs to approve Fraxlend Pair */
+    // TODO: I think the approval leads us open to vulnerability here. Because somebody could snipe post-return and use this contract. I probably have to force msg.sender to be _receiver.
+    function redeem(uint256 _shares, address _receiver, address _owner) external returns (uint256 _amountToReturn) {
+        require(_owner == msg.sender, "Owner and sender must be identical to prevent fund stealing.");
+        IFraxlendPair _FraxlendPair = getFraxlendPair();
+
+        // Redeem requires (msg.sender == owner), so this contract needs to hold the assets
+        _FraxlendPair.transferFrom(_owner, address(this), _shares);
+
+        // Approve Fraxlend
+        getSfrxUsdContract().approve(address(_FraxlendPair), _shares);
+        uint256 _amountToReturnSfrxUsd = getFraxlendPair().redeem(_shares, address(this), address(this));
+        _amountToReturn = approveAndRedeemSfrxUsd(_amountToReturnSfrxUsd, _receiver);
+    }
+
     function removeCollateral(uint256 _collateralAmount, address _receiver) external;
 
     function renounceOwnership() external {
@@ -393,7 +442,11 @@ abstract contract FraxlendYieldTokenCore {
         return getFraxlendPair().renounceTimelock();
     }
 
-    function repayAsset(uint256 _shares, address _borrower) external returns (uint256 _amountToRepay);
+    // TODO: Obviously this doesn't work
+    function repayAsset(uint256 _shares, address _borrower) external returns (uint256 _amountToRepay) {
+        uint256 _amountToRepaySfrxUsd = getFraxlendPair().repayAsset(_shares, _borrower);
+    }
+
     function repayAssetWithCollateral(
         address _swapperAddress,
         uint256 _collateralToSwap,
@@ -460,9 +513,19 @@ abstract contract FraxlendYieldTokenCore {
         return getFraxlendPair().setRateContract(_newRateContract);
     }
 
-    function setSwapper(address _swapper, bool _approval) external;
-    function swappers(address) external view returns (bool);
-    function symbol() external view returns (string memory);
+    function setSwapper(address _swapper, bool _approval) external {
+        return getFraxlendPair().setSwapper(_swapper, _approval);
+    }
+
+    // TODO: This is an auto generated method on IFraxlendPair. Make sure it's correct
+    function swappers(address _address) external view returns (bool) {
+        return getFraxlendPair().swappers(_address);
+    }
+
+    // TODO: Decide how to change this for ease of access
+    function symbol() external view returns (string memory) {
+        return getFraxlendPair().symbol();
+    }
 
     function timelockAddress() external view returns (address) {
         return getFraxlendPair().timelockAddress();
@@ -471,19 +534,38 @@ abstract contract FraxlendYieldTokenCore {
     function toAssetAmount(uint256 _shares, bool _roundUp, bool _previewInterest)
         external
         view
-        returns (uint256 _amount);
+        returns (uint256 _amount)
+    {
+        uint256 _amountSfrxUsd = getFraxlendPair().toAssetAmount(_shares, _roundUp, _previewInterest);
+        _amount = previewRedeemSfrxUsd(_amountSfrxUsd);
+    }
+
     function toAssetShares(uint256 _amount, bool _roundUp, bool _previewInterest)
         external
         view
-        returns (uint256 _shares);
+        returns (uint256 _shares)
+    {
+        uint256 _amountSfrxUsd = previewMintSfrxUsd(_amount);
+        _shares = getFraxlendPair().toAssetShares(_amountSfrxUsd, _roundUp, _previewInterest);
+    }
+
     function toBorrowAmount(uint256 _shares, bool _roundUp, bool _previewInterest)
         external
         view
-        returns (uint256 _amount);
+        returns (uint256 _amount)
+    {
+        uint256 amountSfrxUsd = getFraxlendPair().toBorrowAmount(_shares, _roundUp, _previewInterest);
+        _amount - previewRedeemSfrxUsd(amountSfrxUsd);
+    }
+
     function toBorrowShares(uint256 _amount, bool _roundUp, bool _previewInterest)
         external
         view
-        returns (uint256 _shares);
+        returns (uint256 _shares)
+    {
+        uint256 _amountSfrxUsd = previewMintSfrxUsd(_amount);
+        _shares = getFraxlendPair().toBorrowShares(_amountSfrxUsd, _roundUp, _previewInterest);
+    }
 
     function totalAsset() external view returns (uint128 amount, uint128 shares) {
         uint128 _amountSfrxUSD;
@@ -511,15 +593,22 @@ abstract contract FraxlendYieldTokenCore {
         return getFraxlendPair().totalSupply();
     }
 
-    function transfer(address to, uint256 amount) external returns (bool);
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    // Transfer functions transfer shares, as a result we inherit from FraxlendPair
+    function transfer(address to, uint256 amount) external returns (bool) {
+        return getFraxlendPair().transfer(to, amount);
+    }
+
+    // Transfer functions transfer shares, as a result we inherit from FraxlendPair
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        return getFraxlendPair().transferFrom(from, to, amount);
+    }
 
     function transferOwnership(address newOwner) external {
-        return getFraxlendPair().transferOwnership();
+        return getFraxlendPair().transferOwnership(newOwner);
     }
 
     function transferTimelock(address _newTimelock) external {
-        return getFraxlendPair().transferTimelock();
+        return getFraxlendPair().transferTimelock(_newTimelock);
     }
 
     function unpause() external {
@@ -536,6 +625,7 @@ abstract contract FraxlendYieldTokenCore {
         (_major, _minor, _patch) = getFraxlendPair().version();
     }
 
+    // TODO: Change return to match withdrawAndConvert info
     function withdraw(uint256 _amount, address _receiver, address _owner) external returns (uint256 _sharesToBurn) {
         _sharesToBurn = withdrawAndConvert(_amount, _receiver, _owner);
     }
