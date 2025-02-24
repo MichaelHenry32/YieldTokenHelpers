@@ -102,7 +102,7 @@ abstract contract FraxlendYieldTokenCore {
         internal
         returns (uint256 _amountToReturn)
     {
-        require(_owner == _receiver, "Owner and Receiver must be identical");
+        require(_owner == msg.sender, "Owner and Sender must be identical");
         // address _tokenAddress = fraxlend_pair_address_to_erc20_address[_contractAddress];
         IFraxlendPair _FraxlendPair = getFraxlendPair();
         IERC4626 _MinterRedeemer = getMinterRedeemer();
@@ -595,12 +595,19 @@ abstract contract FraxlendYieldTokenCore {
 
     // Transfer functions transfer shares, as a result we inherit from FraxlendPair
     function transfer(address to, uint256 amount) external returns (bool) {
+        require(1 == 0, "This method is not supported");
         return getFraxlendPair().transfer(to, amount);
     }
 
     // Transfer functions transfer shares, as a result we inherit from FraxlendPair
+    // Users will exlusively be approving this contract, so there's an intermediate transfer.
     function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        return getFraxlendPair().transferFrom(from, to, amount);
+        require(msg.sender == from, "msg.sender and from address must be identical to prevent stealing funds");
+        IFraxlendPair _FraxlendPair = getFraxlendPair();
+
+        // Redeem requires (msg.sender == owner), so this contract needs to hold the assets
+        _FraxlendPair.transferFrom(from, address(this), amount);
+        return _FraxlendPair.transfer(to, amount);
     }
 
     function transferOwnership(address newOwner) external {
