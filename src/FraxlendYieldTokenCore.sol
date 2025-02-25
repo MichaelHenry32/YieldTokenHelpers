@@ -425,15 +425,40 @@ abstract contract FraxlendYieldTokenCore {
         uint256 _amountCollateralOutMin,
         address[] memory _path
     ) external returns (uint256 _totalCollateralBalance);
+
     function liquidate(uint128 _sharesToLiquidate, uint256 _deadline, address _borrower)
         external
-        returns (uint256 _collateralForLiquidator);
-    function maxDeposit(address _receiver) external view returns (uint256 _maxAssets);
-    function maxLTV() external view returns (uint256);
-    function maxMint(address _receiver) external view returns (uint256 _maxShares);
-    function maxRedeem(address _owner) external view returns (uint256 _maxShares);
-    function maxWithdraw(address _owner) external view returns (uint256 _maxAssets);
-    function mint(uint256 _shares, address _receiver) external returns (uint256 _amount);
+        returns (uint256 _collateralForLiquidator)
+    {
+        revert("Don't liquidate via this contract. Use the Fraxlend pair directly");
+    }
+
+    function maxDeposit(address _receiver) external view returns (uint256 _maxAssets) {
+        uint256 maxAssetsSfrxUsd = getFraxlendPair().maxDeposit(_receiver);
+        _maxAssets = previewMintSfrxUsd(maxAssetsSfrxUsd);
+    }
+
+    function maxLTV() external view returns (uint256) {
+        return getFraxlendPair().maxLTV();
+    }
+
+    function maxMint(address _receiver) external view returns (uint256 _maxShares) {
+        _maxShares = getFraxlendPair().maxMint(_receiver);
+    }
+
+    function maxRedeem(address _owner) external view returns (uint256 _maxShares) {
+        _maxShares = getFraxlendPair().maxRedeem(_owner);
+    }
+
+    function maxWithdraw(address _owner) external view returns (uint256 _maxAssets) {
+        uint256 _maxWithdrawSfrxUsd = getFraxlendPair().maxWithdraw(_owner);
+        _maxAssets = previewRedeemSfrxUsd(_maxWithdrawSfrxUsd);
+    }
+
+    function mint(uint256 _shares, address _receiver) external returns (uint256 _amount) {
+        // TODO: The shares stuff. Still don't understand why anyone would mint in this way though
+        revert("Not fully implemented");
+    }
 
     function name() external view returns (string memory) {
         return getFraxlendPair().name();
@@ -489,7 +514,15 @@ abstract contract FraxlendYieldTokenCore {
             FraxlendPairCore.CurrentRateInfo memory _newCurrentRateInfo,
             VaultAccount memory _totalAsset,
             VaultAccount memory _totalBorrow
-        );
+        )
+    {
+        // uint256 _interestEarnedSfrxUsd;
+        // uint256 _feesAmountSfrxUsd;
+        // FraxlendPairCore.CurrentRateInfo currentRateInfoSfrxUsd;
+        // VaultAccount memory _totalAssetSfrxUSD;
+        // VaultAccount memory _totalBorrowSfrxUSD;
+        revert("I need to find an onchain sfrxUSD RPS oracle");
+    }
 
     function previewDeposit(uint256 _assets) external view returns (uint256 _sharesReceived) {
         uint256 _assetsSfrxUsd = previewDepositSfrxUsd(_assets);
@@ -511,7 +544,10 @@ abstract contract FraxlendYieldTokenCore {
         _sharesToBurn = getFraxlendPair().previewWithdraw(_amountSfrxUsd);
     }
 
-    function pricePerShare() external view returns (uint256 _amount);
+    function pricePerShare() external view returns (uint256 _amount) {
+        uint256 _pricePerShareSfrxUsd = getFraxlendPair().pricePerShare();
+        _amount = (_pricePerShareSfrxUsd * getMinterRedeemer().pricePerShare()) / 1e18;
+    }
 
     function protocolLiquidationFee() external view returns (uint256) {
         return getFraxlendPair().protocolLiquidationFee();
@@ -552,9 +588,13 @@ abstract contract FraxlendYieldTokenCore {
         return getFraxlendPair().renounceTimelock();
     }
 
-    // TODO: Obviously this doesn't work
+    /* User must approve this contract for FraxlendShares */
     function repayAsset(uint256 _shares, address _borrower) external returns (uint256 _amountToRepay) {
-        uint256 _amountToRepaySfrxUsd = getFraxlendPair().repayAsset(_shares, _borrower);
+        IFraxlendPair _FraxlendPair = getFraxlendPair();
+        _FraxlendPair.transferFrom(msg.sender, address(this), _shares);
+        _FraxlendPair.approve(address(_FraxlendPair), _shares);
+        uint256 _amountToRepaySfrxUsd = _FraxlendPair.repayAsset(_shares, _borrower);
+        _amountToRepay = approveAndRedeemSfrxUsd(_amountToRepaySfrxUsd, _borrower);
     }
 
     function repayAssetWithCollateral(
@@ -562,9 +602,17 @@ abstract contract FraxlendYieldTokenCore {
         uint256 _collateralToSwap,
         uint256 _amountAssetOutMin,
         address[] memory _path
-    ) external returns (uint256 _amountAssetOut);
-    function revokeBorrowLimitAccessControl(uint256 _borrowLimit) external;
-    function revokeDepositLimitAccessControl(uint256 _depositLimit) external;
+    ) external returns (uint256 _amountAssetOut) {
+        revert("Not supported at this time");
+    }
+
+    function revokeBorrowLimitAccessControl(uint256 _borrowLimit) external {
+        getFraxlendPair().revokeBorrowLimitAccessControl(_borrowLimit);
+    }
+
+    function revokeDepositLimitAccessControl(uint256 _depositLimit) external {
+        getFraxlendPair().revokeDepositLimitAccessControl(_depositLimit);
+    }
 
     function revokeInterestAccessControl() external {
         return getFraxlendPair().revokeInterestAccessControl();
