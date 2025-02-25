@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: ISC
 import "./interfaces/IFraxlendPair.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IFraxtalERC4626MintRedeemer} from "./interfaces/IFraxtalERC4626MintRedeemer.sol";
 
-import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 pragma solidity >=0.8.19;
 
@@ -52,8 +52,9 @@ abstract contract FraxlendYieldTokenCore {
         return IFraxlendPair(getFraxlendPairAddress());
     }
 
-    function getMinterRedeemer() internal view returns (IERC4626 minterRedeemer) {
-        return IERC4626(getMinterRedeemerAddress());
+    // TODO: Actually generate a specific MinterRedeemer Interface so I have access to all methods.
+    function getMinterRedeemer() internal view returns (IFraxtalERC4626MintRedeemer minterRedeemer) {
+        return IFraxtalERC4626MintRedeemer(getMinterRedeemerAddress());
     }
 
     function previewDepositSfrxUsd(uint256 frxUsdAmount) internal view returns (uint256) {
@@ -77,7 +78,7 @@ abstract contract FraxlendYieldTokenCore {
         internal
         returns (uint256 _amountReceived)
     {
-        IERC4626 _MinterRedeemer = getMinterRedeemer();
+        IFraxtalERC4626MintRedeemer _MinterRedeemer = getMinterRedeemer();
         IERC20 SfrxUSDContract = getSfrxUsdContract();
         SfrxUSDContract.approve(address(_MinterRedeemer), _sfrxUsdAmount);
         _amountReceived = _MinterRedeemer.redeem(_sfrxUsdAmount, _receiver, address(this));
@@ -87,7 +88,7 @@ abstract contract FraxlendYieldTokenCore {
         internal
         returns (uint256 _amountReceived)
     {
-        IERC4626 _MinterRedeemer = getMinterRedeemer();
+        IFraxtalERC4626MintRedeemer _MinterRedeemer = getMinterRedeemer();
         IERC20 _FrxUsdContract = getFrxUsdContract();
         _FrxUsdContract.approve(address(_MinterRedeemer), _frxUsdAmount);
         _amountReceived = _MinterRedeemer.deposit(_frxUsdAmount, _receiver);
@@ -124,7 +125,7 @@ abstract contract FraxlendYieldTokenCore {
         require(_owner == msg.sender, "Owner and Sender must be identical");
         // address _tokenAddress = fraxlend_pair_address_to_erc20_address[_contractAddress];
         IFraxlendPair _FraxlendPair = getFraxlendPair();
-        IERC4626 _MinterRedeemer = getMinterRedeemer();
+        IFraxtalERC4626MintRedeemer _MinterRedeemer = getMinterRedeemer();
         uint256 _withdrawStakedTokenAmount = _MinterRedeemer.previewWithdraw(_amount);
         uint256 _withdrawFraxlendShareAmount = _FraxlendPair.previewWithdraw(_withdrawStakedTokenAmount);
         uint256 _amountToReturnSfrxUsd = _FraxlendPair.redeem(_withdrawFraxlendShareAmount, address(this), _owner);
@@ -597,18 +598,27 @@ abstract contract FraxlendYieldTokenCore {
         return getFraxlendPair().revokeWithdrawAccessControl();
     }
 
-    function setBorrowLimit(uint256 _limit) external;
+    function setBorrowLimit(uint256 _limit) external {
+        return getFraxlendPair().setBorrowLimit(_limit);
+    }
 
     function setCircuitBreaker(address _newCircuitBreaker) external {
         return getFraxlendPair().setCircuitBreaker(_newCircuitBreaker);
     }
 
-    function setDepositLimit(uint256 _limit) external;
+    function setDepositLimit(uint256 _limit) external {
+        return getFraxlendPair().setDepositLimit(_limit);
+    }
+
     function setLiquidationFees(
         uint256 _newCleanLiquidationFee,
         uint256 _newDirtyLiquidationFee,
         uint256 _newProtocolLiquidationFee
-    ) external;
+    ) external {
+        return getFraxlendPair().setLiquidationFees(
+            _newCleanLiquidationFee, _newDirtyLiquidationFee, _newProtocolLiquidationFee
+        );
+    }
 
     function setMaxLTV(uint256 _newMaxLTV) external {
         return getFraxlendPair().setMaxLTV(_newMaxLTV);
@@ -731,16 +741,27 @@ abstract contract FraxlendYieldTokenCore {
         return getFraxlendPair().unpause();
     }
 
+    // Todo: update the ratios from sfrxusd to frxusd.
     function updateExchangeRate()
         external
-        returns (bool _isBorrowAllowed, uint256 _lowExchangeRate, uint256 _highExchangeRate);
-
-    function userBorrowShares(address) external view returns (uint256) {
-        return getFraxlendPair().userBorrowShares(address);
+        returns (bool _isBorrowAllowed, uint256 _lowExchangeRate, uint256 _highExchangeRate)
+    {
+        uint256 _lowExchangeRateSfrxUsd;
+        uint256 _highExchangeRateSfrxUsd;
+        (_isBorrowAllowed, _lowExchangeRateSfrxUsd, _highExchangeRateSfrxUsd) = getFraxlendPair().updateExchangeRate();
+        // TODO: This is a non-standard ERC4626 method that I need to call.
+        uint256 _pricePerShare = getMinterRedeemer().pricePerShare();
+        // We lose some precision here but that's fine because these are for display purposes only
+        _lowExchangeRate = (_lowExchangeRateSfrxUsd * _pricePerShare) / 1e18;
+        _highExchangeRate = (_highExchangeRateSfrxUsd * _pricePerShare) / 1e18;
     }
 
-    function userCollateralBalance(address) external view returns (uint256) {
-        return getFraxlendPair().userCollateralBalance(address);
+    function userBorrowShares(address _address) external view returns (uint256) {
+        return getFraxlendPair().userBorrowShares(_address);
+    }
+
+    function userCollateralBalance(address _address) external view returns (uint256) {
+        return getFraxlendPair().userCollateralBalance(_address);
     }
 
     function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
@@ -752,5 +773,7 @@ abstract contract FraxlendYieldTokenCore {
         _sharesToBurn = withdrawAndConvert(_amount, _receiver, _owner);
     }
 
-    function withdrawFees(uint128 _shares, address _recipient) external returns (uint256 _amountToTransfer);
+    function withdrawFees(uint128 _shares, address _recipient) external returns (uint256 _amountToTransfer) {
+        revert("This function is not supported by the Yield Token Helpers contract");
+    }
 }
