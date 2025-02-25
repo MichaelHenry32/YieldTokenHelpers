@@ -56,8 +56,12 @@ abstract contract FraxlendYieldTokenCore {
         return IERC4626(getMinterRedeemerAddress());
     }
 
-    function previewMintSfrxUsd(uint256 frxUsdAmount) internal view returns (uint256) {
+    function previewDepositSfrxUsd(uint256 frxUsdAmount) internal view returns (uint256) {
         return getMinterRedeemer().previewDeposit(frxUsdAmount);
+    }
+
+    function previewMintSfrxUsd(uint256 sfrxUsdAmount) internal view returns (uint256) {
+        return getMinterRedeemer().previewMint(sfrxUsdAmount);
     }
 
     function previewWithdrawSfrxUsd(uint256 frxUsdAmount) internal view returns (uint256) {
@@ -111,6 +115,8 @@ abstract contract FraxlendYieldTokenCore {
         }
     }
 
+    // User must approve this contract to transfer Fraxlend shares on their behalf: 
+    // uint256 allowed = allowance(_owner, msg.sender);
     function withdrawAndConvert(uint256 _amount, address _receiver, address _owner)
         internal
         returns (uint256 _amountToReturn)
@@ -222,10 +228,7 @@ abstract contract FraxlendYieldTokenCore {
         external
         returns (uint256 _shares)
     {
-        uint256 _borrowAmountSfrxUsd = previewWithdrawSfrxUsd(_borrowAmount);
-        transferAndApproveCollateral(_collateralAmount);
-        _shares = getFraxlendPair().borrowAsset(_borrowAmountSfrxUsd, _collateralAmount, address(this));
-        approveAndRedeemSfrxUsd(_borrowAmountSfrxUsd, _receiver);
+        revert("This contract can't borrow on behalf of users because msg.sender must be the borrowers address");
     }
 
     function borrowLimit() external view returns (uint256) {
@@ -255,7 +258,7 @@ abstract contract FraxlendYieldTokenCore {
     }
 
     function convertToShares(uint256 _assets) external view returns (uint256 _shares) {
-        uint256 _assetsSfrxUsd = previewMintSfrxUsd(_assets);
+        uint256 _assetsSfrxUsd = previewDepositSfrxUsd(_assets);
         _shares = getFraxlendPair().convertToShares(_assetsSfrxUsd);
     }
 
@@ -486,24 +489,40 @@ abstract contract FraxlendYieldTokenCore {
             VaultAccount memory _totalAsset,
             VaultAccount memory _totalBorrow
         );
-    function previewDeposit(uint256 _assets) external view returns (uint256 _sharesReceived);
-    function previewMint(uint256 _shares) external view returns (uint256 _amount);
+
+    function previewDeposit(uint256 _assets) external view returns (uint256 _sharesReceived) {
+        uint256 _assetsSfrxUsd = previewDepositSfrxUsd(_assets);
+        _sharesReceived = getFraxlendPair().previewDeposit(_assetsSfrxUsd);
+    }
+
+    function previewMint(uint256 _shares) external view returns (uint256 _amount) {
+        uint256 _amountSfrxUsd = getFraxlendPair().previewMint(_shares);
+        _amount = previewMintSfrxUsd(_amountSfrxUsd);
+    }
 
     function previewRedeem(uint256 _shares) external view returns (uint256 _assets) {
         uint256 assetsSfrxUsd = getFraxlendPair().previewRedeem(_shares);
-        _assets = getMinterRedeemer().previewRedeem(assetsSfrxUsd);
+        _assets = previewRedeemSfrxUsd(assetsSfrxUsd);
     }
 
-    function previewWithdraw(uint256 _amount) external view returns (uint256 _sharesToBurn);
+    function previewWithdraw(uint256 _amount) external view returns (uint256 _sharesToBurn) {
+        uint256 _amountSfrxUsd = previewDepositSfrxUsd(_amount);
+        _sharesToBurn = getFraxlendPair().previewWithdraw(_amountSfrxUsd);
+    }
+
     function pricePerShare() external view returns (uint256 _amount);
-    function protocolLiquidationFee() external view returns (uint256);
+
+    function protocolLiquidationFee() external view returns (uint256) {
+        return getFraxlendPair().protocolLiquidationFee();
+    }
 
     function rateContract() external view returns (address) {
         return getFraxlendPair().rateContract();
     }
 
-    /* Needs to approve Fraxlend Pair */
-    // TODO: I think the approval leads us open to vulnerability here. Because somebody could snipe post-return and use this contract. I probably have to force msg.sender to be _receiver.
+    // User must approve this contract to transfer Fraxlend shares on their behalf: 
+    // uint256 allowed = allowance(_owner, msg.sender);
+    // This also breaks the interface...
     function redeem(uint256 _shares, address _receiver, address _owner) external returns (uint256 _amountToReturn) {
         require(_owner == msg.sender, "Owner and sender must be identical to prevent fund stealing.");
         IFraxlendPair _FraxlendPair = getFraxlendPair();
@@ -517,7 +536,12 @@ abstract contract FraxlendYieldTokenCore {
         _amountToReturn = approveAndRedeemSfrxUsd(_amountToReturnSfrxUsd, _receiver);
     }
 
-    function removeCollateral(uint256 _collateralAmount, address _receiver) external;
+    // This uses msg.sender, so we can't implement this method
+    function removeCollateral(uint256 _collateralAmount, address _receiver) external {
+        revert("This contract can't remove collateral on behalf of users because msg.sender must be the borrowers address");
+
+        return remov
+    }
 
     function renounceOwnership() external {
         return getFraxlendPair().renounceOwnership();
@@ -630,7 +654,7 @@ abstract contract FraxlendYieldTokenCore {
         view
         returns (uint256 _shares)
     {
-        uint256 _amountSfrxUsd = previewMintSfrxUsd(_amount);
+        uint256 _amountSfrxUsd = previewDepositSfrxUsd(_amount);
         _shares = getFraxlendPair().toAssetShares(_amountSfrxUsd, _roundUp, _previewInterest);
     }
 
@@ -648,7 +672,7 @@ abstract contract FraxlendYieldTokenCore {
         view
         returns (uint256 _shares)
     {
-        uint256 _amountSfrxUsd = previewMintSfrxUsd(_amount);
+        uint256 _amountSfrxUsd = previewDepositSfrxUsd(_amount);
         _shares = getFraxlendPair().toBorrowShares(_amountSfrxUsd, _roundUp, _previewInterest);
     }
 
