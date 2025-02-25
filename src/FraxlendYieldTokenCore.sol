@@ -16,6 +16,8 @@ pragma solidity >=0.8.19;
 //     }
 // }
 
+// TODO: It might make sense to just infinite approve everything on creation. That could result in significant gas savings.
+
 abstract contract FraxlendYieldTokenCore {
     function getFraxlendPairAddress() internal returns (address) {
         return address(this);
@@ -58,6 +60,11 @@ abstract contract FraxlendYieldTokenCore {
         return getMinterRedeemer().previewDeposit(frxUsdAmount);
     }
 
+    function previewWithdrawSfrxUsd(uint256 frxUsdAmount) internal view returns (uint256) {
+        return getMinterRedeemer().previewWithdraw(frxUsdAmount);
+    }
+
+    // TODO: Verify this is being used where it should be
     function previewRedeemSfrxUsd(uint256 sfrxUsdAmount) internal view returns (uint256) {
         return getMinterRedeemer().previewRedeem(sfrxUsdAmount);
     }
@@ -72,6 +79,16 @@ abstract contract FraxlendYieldTokenCore {
         _amountReceived = _MinterRedeemer.redeem(_sfrxUsdAmount, _receiver, address(this));
     }
 
+    function approveAndMintSfrxUsd(uint256 _frxUsdAmount, address _receiver)
+        internal
+        returns (uint256 _amountReceived)
+    {
+        IERC4626 _MinterRedeemer = getMinterRedeemer();
+        IERC20 _FrxUsdContract = getFrxUsdContract();
+        _FrxUsdContract.approve(address(_MinterRedeemer), _frxUsdAmount);
+        _amountReceived = _MinterRedeemer.deposit(_frxUsdAmount, _receiver);
+    }
+
     function approveSfrxUSDToFraxlend(uint256 _sfrxUsdAmount) internal {
         IERC20 SfrxUSDContract = getSfrxUsdContract();
         SfrxUSDContract.approve(getFraxlendPairAddress(), _sfrxUsdAmount);
@@ -79,22 +96,18 @@ abstract contract FraxlendYieldTokenCore {
 
     function convertAndDeposit(uint256 _amount, address _receiver) internal returns (uint256 _sharesReceived) {
         IFraxlendPair _FraxlendPair = getFraxlendPair();
-        IERC4626 _MinterRedeemer = getMinterRedeemer();
-        address _stakedTokenAddress = _FraxlendPair.asset();
-        IERC20 _StakedTokenContract = IERC20(_stakedTokenAddress);
+        IERC20 _SfrxUsdContract = getSfrxUsdContract();
+        IERC20 _FrxUsdContract = getFrxUsdContract();
 
         // Get the token address and transfer funds to this contract
-        address _deposit_token_address = _MinterRedeemer.asset();
-        IERC20 _DepositTokenContract = IERC20(_deposit_token_address);
-        _DepositTokenContract.transferFrom(msg.sender, address(this), _amount);
+        _FrxUsdContract.transferFrom(msg.sender, address(this), _amount);
 
         // Send staked tokens to this contract
-        _DepositTokenContract.approve(address(_MinterRedeemer), _amount);
-        uint256 _stakedTokensReceived = _MinterRedeemer.deposit(_amount, address(this));
-        if (_stakedTokensReceived > 0) {
-            _StakedTokenContract.approve(address(_FraxlendPair), _stakedTokensReceived);
+        uint256 _sfrxUsdAmount = approveAndMintSfrxUsd(_amount, address(this));
+        if (_sfrxUsdAmount > 0) {
+            _SfrxUsdContract.approve(address(_FraxlendPair), _sfrxUsdAmount);
             // send FraxLend tokens directly to user
-            _sharesReceived = _FraxlendPair.deposit(_stakedTokensReceived, _receiver);
+            _sharesReceived = _FraxlendPair.deposit(_sfrxUsdAmount, _receiver);
         }
     }
 
@@ -112,6 +125,13 @@ abstract contract FraxlendYieldTokenCore {
         if (_amountToReturnSfrxUsd > 0) {
             _amountToReturn = approveAndRedeemSfrxUsd(_amountToReturnSfrxUsd, _receiver);
         }
+    }
+
+    function transferAndApproveCollateral(uint256 _collateralAmount) internal returns (bool) {
+        IFraxlendPair _FraxlendPair = getFraxlendPair();
+        IERC20 _CollateralContract = IERC20(_FraxlendPair.collateralContract());
+        _CollateralContract.transferFrom(msg.sender, address(this), _collateralAmount);
+        return _CollateralContract.approve(address(_FraxlendPair), _collateralAmount);
     }
 
     function DEPLOYER_ADDRESS() external view returns (address) {
@@ -158,8 +178,14 @@ abstract contract FraxlendYieldTokenCore {
         return getFraxlendPair().acceptTransferTimelock();
     }
 
-    function addCollateral(uint256 _collateralAmount, address _borrower) external;
+    // Everything is approved through this contract, so we need to middleman the assets
+    function addCollateral(uint256 _collateralAmount, address _borrower) external {
+        IFraxlendPair _FraxlendPair = getFraxlendPair();
+        transferAndApproveCollateral(_collateralAmount);
+        _FraxlendPair.addCollateral(_collateralAmount, _borrower);
+    }
 
+    // TODO Convert everything from frxUSD to sfrxUSD
     function addInterest(bool _returnAccounting)
         external
         returns (
@@ -175,20 +201,65 @@ abstract contract FraxlendYieldTokenCore {
             getFraxlendPair().addInterest(_returnAccounting);
     }
 
-    function allowance(address owner, address spender) external view returns (uint256);
-    function approve(address spender, uint256 amount) external returns (bool);
-    function asset() external view returns (address);
-    function balanceOf(address account) external view returns (uint256);
+    // This is for the yFraxlendPair token, so we forward to the pair
+    function allowance(address owner, address spender) external view returns (uint256) {
+        return getFraxlendPair().allowance(owner, spender);
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        return getFraxlendPair().approve(spender, amount);
+    }
+
+    function asset() external view returns (address) {
+        return getFrxUsdAddress();
+    }
+
+    function balanceOf(address account) external view returns (uint256) {
+        return getFraxlendPair().balanceOf(account);
+    }
+
     function borrowAsset(uint256 _borrowAmount, uint256 _collateralAmount, address _receiver)
         external
-        returns (uint256 _shares);
-    function borrowLimit() external view returns (uint256);
-    function changeFee(uint32 _newFee) external;
-    function circuitBreakerAddress() external view returns (address);
-    function cleanLiquidationFee() external view returns (uint256);
-    function collateralContract() external view returns (address);
-    function convertToAssets(uint256 _shares) external view returns (uint256 _assets);
-    function convertToShares(uint256 _assets) external view returns (uint256 _shares);
+        returns (uint256 _shares)
+    {
+        uint256 _borrowAmountSfrxUsd = previewWithdrawSfrxUsd(_borrowAmount);
+        transferAndApproveCollateral(_collateralAmount);
+        _shares = getFraxlendPair().borrowAsset(_borrowAmountSfrxUsd, _collateralAmount, address(this));
+        approveAndRedeemSfrxUsd(_borrowAmountSfrxUsd, _receiver);
+    }
+
+    function borrowLimit() external view returns (uint256) {
+        uint256 borrowLimitSfrxUsd = getFraxlendPair().borrowLimit();
+        return previewRedeemSfrxUsd(borrowLimitSfrxUsd);
+    }
+
+    function changeFee(uint32 _newFee) external {
+        return getFraxlendPair().changeFee(_newFee);
+    }
+
+    function circuitBreakerAddress() external view returns (address) {
+        return getFraxlendPair().circuitBreakerAddress();
+    }
+
+    function cleanLiquidationFee() external view returns (uint256) {
+        return getFraxlendPair().cleanLiquidationFee();
+    }
+
+    function collateralContract() external view returns (address) {
+        return getFraxlendPair().collateralContract();
+    }
+
+    function convertToAssets(uint256 _shares) external view returns (uint256 _assets) {
+        uint256 _assetsSfrxUsd = getFraxlendPair().convertToAssets(_shares);
+        _assets = previewRedeemSfrxUsd(_assetsSfrxUsd);
+    }
+
+    function convertToShares(uint256 _assets) external view returns (uint256 _shares) {
+        uint256 _assetsSfrxUsd = previewMintSfrxUsd(_assets);
+        _shares = getFraxlendPair().convertToShares(_assetsSfrxUsd);
+    }
+
+    // TODO: Find onchain yield oracle for sfrxUSD
     function currentRateInfo()
         external
         view
@@ -204,14 +275,23 @@ abstract contract FraxlendYieldTokenCore {
         return getFraxlendPair().decimals();
     }
 
-    function decreaseAllowance(address spender, uint256 subtractedValue) external returns (bool);
+    function decreaseAllowance(address spender, uint256 subtractedValue) external returns (bool) {
+        return getFraxlendPair().decreaseAllowance(spender, subtractedValue);
+    }
 
     function deposit(uint256 _amount, address _receiver) external returns (uint256 _sharesReceived) {
         _sharesReceived = convertAndDeposit(_amount, _receiver);
     }
 
-    function depositLimit() external view returns (uint256);
-    function dirtyLiquidationFee() external view returns (uint256);
+    function depositLimit() external view returns (uint256) {
+        uint256 _depositLimitSfrxUsd = getFraxlendPair().depositLimit();
+        return previewRedeemSfrxUsd(_depositLimitSfrxUsd);
+    }
+
+    function dirtyLiquidationFee() external view returns (uint256) {
+        return getFraxlendPair().dirtyLiquidationFee();
+    }
+
     function exchangeRateInfo()
         external
         view
@@ -221,8 +301,7 @@ abstract contract FraxlendYieldTokenCore {
             uint184 lastTimestamp,
             uint256 lowExchangeRate,
             uint256 highExchangeRate
-        )
-    {}
+        );
 
     function getConstants()
         external
@@ -238,7 +317,7 @@ abstract contract FraxlendYieldTokenCore {
             uint256 _MAX_PROTOCOL_FEE
         )
     {
-        // TODO: Verify these don't actually change
+        // TODO: Verify these are all percentages
         (
             _LTV_PRECISION,
             _LIQ_PRECISION,
@@ -270,8 +349,14 @@ abstract contract FraxlendYieldTokenCore {
     function getUserSnapshot(address _address)
         external
         view
-        returns (uint256 _userAssetShares, uint256 _userBorrowShares, uint256 _userCollateralBalance);
-    function increaseAllowance(address spender, uint256 addedValue) external returns (bool);
+        returns (uint256 _userAssetShares, uint256 _userBorrowShares, uint256 _userCollateralBalance)
+    {
+        return getFraxlendPair().getUserSnapshot(_address);
+    }
+
+    function increaseAllowance(address spender, uint256 addedValue) external returns (bool) {
+        return getFraxlendPair().increaseAllowance(spender, addedValue);
+    }
 
     function isBorrowAccessControlRevoked() external view returns (bool) {
         return getFraxlendPair().isBorrowAccessControlRevoked();
