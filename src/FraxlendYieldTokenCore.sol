@@ -115,7 +115,7 @@ abstract contract FraxlendYieldTokenCore {
         }
     }
 
-    // User must approve this contract to transfer Fraxlend shares on their behalf: 
+    // User must approve this contract to transfer Fraxlend shares on their behalf:
     // uint256 allowed = allowance(_owner, msg.sender);
     function withdrawAndConvert(uint256 _amount, address _receiver, address _owner)
         internal
@@ -520,7 +520,7 @@ abstract contract FraxlendYieldTokenCore {
         return getFraxlendPair().rateContract();
     }
 
-    // User must approve this contract to transfer Fraxlend shares on their behalf: 
+    // User must approve this contract to transfer Fraxlend shares on their behalf:
     // uint256 allowed = allowance(_owner, msg.sender);
     // This also breaks the interface...
     function redeem(uint256 _shares, address _receiver, address _owner) external returns (uint256 _amountToReturn) {
@@ -538,9 +538,9 @@ abstract contract FraxlendYieldTokenCore {
 
     // This uses msg.sender, so we can't implement this method
     function removeCollateral(uint256 _collateralAmount, address _receiver) external {
-        revert("This contract can't remove collateral on behalf of users because msg.sender must be the borrowers address");
-
-        return remov
+        revert(
+            "This contract can't remove collateral on behalf of users because msg.sender must be the borrowers address"
+        );
     }
 
     function renounceOwnership() external {
@@ -734,8 +734,14 @@ abstract contract FraxlendYieldTokenCore {
     function updateExchangeRate()
         external
         returns (bool _isBorrowAllowed, uint256 _lowExchangeRate, uint256 _highExchangeRate);
-    function userBorrowShares(address) external view returns (uint256);
-    function userCollateralBalance(address) external view returns (uint256);
+
+    function userBorrowShares(address) external view returns (uint256) {
+        return getFraxlendPair().userBorrowShares(address);
+    }
+
+    function userCollateralBalance(address) external view returns (uint256) {
+        return getFraxlendPair().userCollateralBalance(address);
+    }
 
     function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
         (_major, _minor, _patch) = getFraxlendPair().version();
