@@ -424,7 +424,11 @@ abstract contract FraxlendYieldTokenCore {
         uint256 _initialCollateralAmount,
         uint256 _amountCollateralOutMin,
         address[] memory _path
-    ) external returns (uint256 _totalCollateralBalance);
+    ) external returns (uint256 _totalCollateralBalance) {
+        revert(
+            "Leveraged positions are not currently supported. For all borrowing operations, please use the FraxlendPair directly"
+        );
+    }
 
     function liquidate(uint128 _sharesToLiquidate, uint256 _deadline, address _borrower)
         external
@@ -516,11 +520,6 @@ abstract contract FraxlendYieldTokenCore {
             VaultAccount memory _totalBorrow
         )
     {
-        // uint256 _interestEarnedSfrxUsd;
-        // uint256 _feesAmountSfrxUsd;
-        // FraxlendPairCore.CurrentRateInfo currentRateInfoSfrxUsd;
-        // VaultAccount memory _totalAssetSfrxUSD;
-        // VaultAccount memory _totalBorrowSfrxUSD;
         revert("I need to find an onchain sfrxUSD RPS oracle");
     }
 
