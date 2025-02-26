@@ -16,6 +16,38 @@ contract FraxlendLenderHelpers {
         uint128 shares;
     }
 
+    function RATE_PRECISION() external view returns (uint256) {
+        return getFraxlendPair().RATE_PRECISION();
+    }
+
+    function DEVIATION_PRECISION() external view returns (uint256) {
+        return getFraxlendPair().DEVIATION_PRECISION();
+    }
+
+    function EXCHANGE_PRECISION() external view returns (uint256) {
+        return getFraxlendPair().DEVIATION_PRECISION();
+    }
+
+    function FEE_PRECISION() external view returns (uint256) {
+        return getFraxlendPair().FEE_PRECISION();
+    }
+
+    function LIQ_PRECISION() external view returns (uint256) {
+        return getFraxlendPair().LIQ_PRECISION();
+    }
+
+    function LTV_PRECISION() external view returns (uint256) {
+        return getFraxlendPair().LTV_PRECISION();
+    }
+
+    function MAX_PROTOCOL_FEE() external view returns (uint256) {
+        return getFraxlendPair().MAX_PROTOCOL_FEE();
+    }
+
+    function UTIL_PREC() external view returns (uint256) {
+        return getFraxlendPair().UTIL_PREC();
+    }
+
     function getFraxlendPairAddress() internal view returns (address) {
         return fraxlendPairAddress;
     }
@@ -29,11 +61,11 @@ contract FraxlendLenderHelpers {
     }
 
     function getSfrxUsdRPS() internal view returns (uint256) {
-        ISfrxUsdFrxUsdOracle _SfrxUsdOracle = ISfrxUsdFrxUsdOracle("0x1B680F4385f24420D264D78cab7C58365ED3F1FF");
+        ISfrxUsdFrxUsdOracle _SfrxUsdOracle = ISfrxUsdFrxUsdOracle(0x1B680F4385f24420D264D78cab7C58365ED3F1FF);
 
-        (uint40 cycleEnd, uint40 lastSync, uint216 rewardCycleAmount) = _SfrxUsdOracle.rewardsCycleData();
-        uint256 totalAssets = _SfrxUsdOracle.storedTotalAssets();
-        return rewardCycleAmount / ((cycleEnd - lastSync) * totalAssets() / RATE_PRECISION());
+        (uint40 _cycleEnd, uint40 _lastSync, uint216 _rewardCycleAmount) = _SfrxUsdOracle.rewardsCycleData();
+        uint256 _totalAssets = _SfrxUsdOracle.storedTotalAssets();
+        return _rewardCycleAmount / ((_cycleEnd - _lastSync) * _totalAssets / this.RATE_PRECISION());
     }
 
     function getSfrxUsdContract() internal view returns (IERC20 SfrxUsdContract) {
@@ -141,38 +173,6 @@ contract FraxlendLenderHelpers {
         return _CollateralContract.approve(address(_FraxlendPair), _collateralAmount);
     }
 
-    function RATE_PRECISION() external view returns (uint256) {
-        return getFraxlendPair().RATE_PRECISION();
-    }
-
-    function DEVIATION_PRECISION() external view returns (uint256) {
-        return getFraxlendPair().DEVIATION_PRECISION();
-    }
-
-    function EXCHANGE_PRECISION() external view returns (uint256) {
-        return getFraxlendPair().DEVIATION_PRECISION();
-    }
-
-    function FEE_PRECISION() external view returns (uint256) {
-        return getFraxlendPair().FEE_PRECISION();
-    }
-
-    function LIQ_PRECISION() external view returns (uint256) {
-        return getFraxlendPair().LIQ_PRECISION();
-    }
-
-    function LTV_PRECISION() external view returns (uint256) {
-        return getFraxlendPair().LTV_PRECISION();
-    }
-
-    function MAX_PROTOCOL_FEE() external view returns (uint256) {
-        return getFraxlendPair().MAX_PROTOCOL_FEE();
-    }
-
-    function UTIL_PREC() external view returns (uint256) {
-        return getFraxlendPair().UTIL_PREC();
-    }
-
     // function addInterest(bool _returnAccounting)
     //     external
     //     returns (
@@ -219,17 +219,23 @@ contract FraxlendLenderHelpers {
         external
         view
         returns (
-            uint32 lastBlock,
-            uint32 feeToProtocolRate,
-            uint64 lastTimestamp,
-            uint64 ratePerSec,
-            uint64 fullUtilizationRate
+            uint32 _lastBlock,
+            uint32 _feeToProtocolRate,
+            uint64 _lastTimestamp,
+            uint64 _ratePerSec, // Give RPS of all tokens which differs from IFraxlendPair RPS which gives the _ratePerSecond of lent tokens.
+            uint64 _fullUtilizationRate
         )
     {
-        revert("Still looking for sfrxusd rps oracle");
+        IFraxlendPair _FraxlendPair = getFraxlendPair();
+        (_lastBlock, _feeToProtocolRate, _lastTimestamp, rpsLentSfrxUsd, _fullUtilizationRateSfrxUSD) = _FraxlendPair.currentRateInfo();
+        (uint128 _totalAssetAmount,, uint128 _totalBorrowAmount,,) = _FraxlendPair.getPairAccounting();
+        uint256 _lent_rps = rpsLentSfrxUsd * _totalBorrowAmount / _totalAssetAmount;
+        uint256 _uinlent_rps = getSfrxUsdRPS() * (_totalAssetAmount - _totalBorrowAmount) / _totalAssetAmount;
+        uint256 _pricePerShare = getMinterRedeemer().pricePerShare();
+        _ratePerSec = (_lentRPS + _uinlent_rps) * pricePerShare();;
+        _fullUtilizationRate * pricePerShare();
     }
 
-    // TODO: Find onchain yield oracle for sfrxUSD
     function decimals() external view returns (uint8) {
         return getFraxlendPair().decimals();
     }
@@ -251,12 +257,23 @@ contract FraxlendLenderHelpers {
         external
         view
         returns (
-            address oracle,
-            uint32 maxOracleDeviation,
-            uint184 lastTimestamp,
-            uint256 lowExchangeRate,
-            uint256 highExchangeRate
-        );
+            address _oracle,
+            uint32  _maxOracleDeviation,
+            uint184 _lastTimestamp,
+            uint256 _lowExchangeRate,
+            uint256 _highExchangeRate
+        ) {
+            (
+                _oracle,
+                _maxOracleDeviation,
+                _lastTimestamp,
+                _lowExchangeRateSfrxUsd,
+                _highExchangeRateSfrxUsd
+            ) = getFraxlendPair().exchangeRateInfo();
+            uint256 _pricePerShare = getMinterRedeemer().pricePerShare();   
+            _lowExchangeRate = _lowExchangeRateSfrxUsd * _pricePerShare;
+            _highExchangeRate = _highExchangeRateSfrxUsd * _pricePerShare
+        }
 
     function getConstants()
         external
@@ -272,7 +289,6 @@ contract FraxlendLenderHelpers {
             uint256 _MAX_PROTOCOL_FEE
         )
     {
-        // TODO: Verify these are all percentages
         (
             _LTV_PRECISION,
             _LIQ_PRECISION,
@@ -305,8 +321,11 @@ contract FraxlendLenderHelpers {
         )
     {
         // TODO: These should probably be converted but also it's just a division on _totalAssetAmount, _totalBorrowAmount, and _totalCollateral
-        (_totalAssetAmount, _totalAssetShares, _totalBorrowAmount, _totalBorrowShares, _totalCollateral) =
+        (_totalAssetAmountSfrxUsd, _totalAssetShares, _totalBorrowAmountSfrxUsd, _totalBorrowShares, _totalCollateral) =
             getFraxlendPair().getPairAccounting();
+        uint256 _pricePerShare = getMinterRedeemer().pricePerShare();   
+        _totalAssetAmount = _totalAssetAmountSfrxUsd * _pricePerShare;
+        _totalBorrowAmount = _totalBorrowAmountSfrxUsd * _pricePerShare
     }
 
     function maxDeposit(address _receiver) external view returns (uint256 _maxAssets) {
@@ -453,21 +472,6 @@ contract FraxlendLenderHelpers {
         // Redeem requires (msg.sender == owner), so this contract needs to hold the assets
         _FraxlendPair.transferFrom(from, address(this), amount);
         return _FraxlendPair.transfer(to, amount);
-    }
-
-    // Todo: update the ratios from sfrxusd to frxusd.
-    function updateExchangeRate()
-        external
-        returns (bool _isBorrowAllowed, uint256 _lowExchangeRate, uint256 _highExchangeRate)
-    {
-        uint256 _lowExchangeRateSfrxUsd;
-        uint256 _highExchangeRateSfrxUsd;
-        (_isBorrowAllowed, _lowExchangeRateSfrxUsd, _highExchangeRateSfrxUsd) = getFraxlendPair().updateExchangeRate();
-        // TODO: This is a non-standard ERC4626 method that I need to call.
-        uint256 _pricePerShare = getMinterRedeemer().pricePerShare();
-        // We lose some precision here but that's fine because these are for display purposes only
-        _lowExchangeRate = (_lowExchangeRateSfrxUsd * _pricePerShare) / 1e18;
-        _highExchangeRate = (_highExchangeRateSfrxUsd * _pricePerShare) / 1e18;
     }
 
     // TODO: Change return to match withdrawAndConvert info

@@ -2,8 +2,7 @@
 
 In-Progress and as-of-yet untested code but:
 
-This smart contract aims to wrap Fraxlend and allow for the easy usage of sfrxUSD Fraxlend asset pairs. 
-To ensure ease-of-use and UI upgradeability, these contracts will expose the exact same IFraxlendPair interface, although it should be noted that permissioned methods and borrow write methods will not work.
+This smart contract aims to wrap Fraxlend and allow for the easy usage of sfrxUSD Fraxlend asset pairs for lenders. 
 
 To deploy all contracts to your local anvil node:
 
