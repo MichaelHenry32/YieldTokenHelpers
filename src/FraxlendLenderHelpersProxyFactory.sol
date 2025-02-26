@@ -2,11 +2,11 @@
 
 import "@openzeppelin/contracts/proxy/Clones.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./FraxlendYieldTokenProxy.sol";
+import "./FraxlendLenderHelpersProxy.sol";
 
 pragma solidity ^0.8.0;
 
-contract PairFactory is Ownable {
+contract FraxlendLenderHelpersFactory is Ownable {
     using Clones for address;
 
     address private implementation;
@@ -20,13 +20,13 @@ contract PairFactory is Ownable {
         return Clones.predictDeterministicAddress(implementation, salt);
     }
 
-    function createFraxlendYieldTokenProxy(address _fraxlendPairAddress, bytes32 salt)
+    function createFraxlendLenderHelpersProxy(address _fraxlendPairAddress, bytes32 salt)
         external
         payable
         onlyOwner
         returns (address _clone)
     {
         _clone = Clones.cloneDeterministic(implementation, salt);
-        FraxlendYieldTokenProxy(_clone).initialize(_fraxlendPairAddress);
+        FraxlendLenderHelpersProxy(_clone).initialize(_fraxlendPairAddress);
     }
 }

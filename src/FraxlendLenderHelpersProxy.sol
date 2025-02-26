@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 pragma solidity ^0.8.0;
 
-contract FraxlendYieldTokenProxy is Initializable {
+contract FraxlendLenderHelpersProxy is Initializable {
     address private fraxlendPairAddress;
 
     constructor() {}
