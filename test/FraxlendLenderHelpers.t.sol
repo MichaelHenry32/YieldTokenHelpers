@@ -100,7 +100,6 @@ contract FraxLendYieldTokenHelpersTest is Test {
             (_FraxlendDirectTotalAssetAmount * pricePerShare) / 1e18,
             100000
         );
-
         vm.stopPrank();
     }
 }
