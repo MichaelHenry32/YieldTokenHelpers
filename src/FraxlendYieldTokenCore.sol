@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: ISC
 import "./interfaces/IFraxlendPair.sol";
 import {IFraxtalERC4626MintRedeemer} from "./interfaces/IFraxtalERC4626MintRedeemer.sol";
+import {ISfrxUsdFrxUsdOracle} from "./interfaces/ISFraxFraxOracle.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -19,8 +20,10 @@ pragma solidity >=0.8.19;
 // TODO: It might make sense to just infinite approve everything on creation. That could result in significant gas savings.
 
 abstract contract FraxlendYieldTokenCore {
+    address private fraxlendPairAddress; // Needs to be first to ensure memory alignment with FraxlendYieldTokenProxy
+
     function getFraxlendPairAddress() internal returns (address) {
-        return address(this);
+        return fraxlendPairAddress;
     }
 
     struct VaultAccount {
@@ -34,6 +37,14 @@ abstract contract FraxlendYieldTokenCore {
 
     function getSfrxUsdAddress() internal view returns (address) {
         return address(0xfc00000000000000000000000000000000000008);
+    }
+
+    function getSfrxUsdRPS() internal view returns (uint256) {
+        ISfrxUsdFrxUsdOracle _SfrxUsdOracle = ISfrxUsdFrxUsdOracle("0x1B680F4385f24420D264D78cab7C58365ED3F1FF");
+
+        (uint40 cycleEnd, uint40 lastSync, uint216 rewardCycleAmount) = _SfrxUsdOracle.rewardsCycleData();
+        uint256 totalAssets = _SfrxUsdOracle.storedTotalAssets();
+        return rewardCycleAmount / ((cycleEnd - lastSync) * totalAssets() / RATE_PRECISION());
     }
 
     function getSfrxUsdContract() internal view returns (IERC20 SfrxUsdContract) {
@@ -273,7 +284,10 @@ abstract contract FraxlendYieldTokenCore {
             uint64 lastTimestamp,
             uint64 ratePerSec,
             uint64 fullUtilizationRate
-        );
+        )
+    {
+        revert("Still looking for sfrxusd rps oracle");
+    }
 
     function decimals() external view returns (uint8) {
         return getFraxlendPair().decimals();
