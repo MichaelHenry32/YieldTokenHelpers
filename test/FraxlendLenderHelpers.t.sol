@@ -85,7 +85,18 @@ contract FraxLendYieldTokenHelpersTest is Test {
             uint256 _totalCollateral
         ) = _Helpers.getPairAccounting();
 
+        (
+            uint128 _FraxlendDirectTotalAssetAmount,
+            uint128 _FraxlendDirectTotalAssetShares,
+            uint128 _FraxlendDirectTotalBorrowAmount,
+            uint128 _FraxlendDirectTotalBorrowShares,
+            uint256 _FraxlendDirectTotalCollateral
+        ) = _FraxlendPair.getPairAccounting();
+
         console.log("frxusd balance %d", _totalAssetAmount);
+        console.log("sfrxusd balance %d", _FraxlendDirectTotalAssetAmount);
+        uint256 pricePerShare = _Helpers.pricePerShare();
+        console.log("Price Per Share %d", pricePerShare);
 
         vm.stopPrank();
     }

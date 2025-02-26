@@ -113,6 +113,13 @@ contract FraxlendLenderHelpers {
         return IFraxtalERC4626MintRedeemer(getMinterRedeemerAddress());
     }
 
+    function previewConvertSfrxUsd(
+        uint256 _amountSfrxUsd
+    ) internal view returns (uint256 _amountFrxUsd) {
+        uint256 _pricePerShare = getMinterRedeemer().pricePerShare();
+        _amountFrxUsd = (_amountSfrxUsd * _pricePerShare) / 1e18;
+    }
+
     function previewDepositSfrxUsd(
         uint256 frxUsdAmount
     ) internal view returns (uint256) {
@@ -315,9 +322,10 @@ contract FraxlendLenderHelpers {
             _totalAssetAmount;
         uint256 _uinlent_rps = (getSfrxUsdRPS() *
             (_totalAssetAmount - _totalBorrowAmount)) / _totalAssetAmount;
-        uint256 _pricePerShare = getMinterRedeemer().pricePerShare();
-        _ratePerSec = uint64((_lent_rps + _uinlent_rps) * _pricePerShare);
-        _fullUtilizationRate * _pricePerShare;
+        _ratePerSec = uint64(previewConvertSfrxUsd(_lent_rps + _uinlent_rps));
+        _fullUtilizationRate = uint64(
+            previewConvertSfrxUsd(_fullUtilizationRateSfrxUSD)
+        );
     }
 
     function decimals() external view returns (uint8) {
@@ -363,9 +371,8 @@ contract FraxlendLenderHelpers {
             _lowExchangeRateSfrxUsd,
             _highExchangeRateSfrxUsd
         ) = getFraxlendPair().exchangeRateInfo();
-        uint256 _pricePerShare = getMinterRedeemer().pricePerShare();
-        _lowExchangeRate = _lowExchangeRateSfrxUsd * _pricePerShare;
-        _highExchangeRate = _highExchangeRateSfrxUsd * _pricePerShare;
+        _lowExchangeRate = previewConvertSfrxUsd(_lowExchangeRateSfrxUsd);
+        _highExchangeRate = previewConvertSfrxUsd(_highExchangeRateSfrxUsd);
     }
 
     function getConstants()
@@ -428,10 +435,11 @@ contract FraxlendLenderHelpers {
             _totalBorrowShares,
             _totalCollateral
         ) = getFraxlendPair().getPairAccounting();
-        uint256 _pricePerShare = getMinterRedeemer().pricePerShare();
-        _totalAssetAmount = uint128(_totalAssetAmountSfrxUsd * _pricePerShare);
+        _totalAssetAmount = uint128(
+            previewWithdrawSfrxUsd(_totalAssetAmountSfrxUsd)
+        );
         _totalBorrowAmount = uint128(
-            _totalBorrowAmountSfrxUsd * _pricePerShare
+            previewWithdrawSfrxUsd(_totalBorrowAmountSfrxUsd)
         );
     }
 
@@ -513,10 +521,7 @@ contract FraxlendLenderHelpers {
     }
 
     function pricePerShare() external view returns (uint256 _amount) {
-        uint256 _pricePerShareSfrxUsd = getFraxlendPair().pricePerShare();
-        _amount =
-            (_pricePerShareSfrxUsd * getMinterRedeemer().pricePerShare()) /
-            1e18;
+        _amount = previewConvertSfrxUsd(getFraxlendPair().pricePerShare());
     }
 
     function rateContract() external view returns (address) {
