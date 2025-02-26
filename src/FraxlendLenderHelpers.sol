@@ -436,10 +436,10 @@ contract FraxlendLenderHelpers {
             _totalCollateral
         ) = getFraxlendPair().getPairAccounting();
         _totalAssetAmount = uint128(
-            previewWithdrawSfrxUsd(_totalAssetAmountSfrxUsd)
+            previewConvertSfrxUsd(_totalAssetAmountSfrxUsd)
         );
         _totalBorrowAmount = uint128(
-            previewWithdrawSfrxUsd(_totalBorrowAmountSfrxUsd)
+            previewConvertSfrxUsd(_totalBorrowAmountSfrxUsd)
         );
     }
 
