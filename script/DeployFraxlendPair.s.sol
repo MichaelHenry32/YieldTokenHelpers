@@ -7,6 +7,7 @@ import {IERC20} from "../lib/openzeppelin-contracts/contracts/interfaces/IERC20.
 import {IFraxlendPairDeployer} from "../src/interfaces/IFraxlendPairDeployer.sol";
 import {IFraxlendPair} from "../src/interfaces/IFraxlendPair.sol";
 import {StdUtils} from "../lib/forge-std/src/StdUtils.sol";
+import "../lib/openzeppelin-contracts/contracts/utils/Create2.sol";
 
 contract DeployFraxlend is Script {
     uint256 public localFork;
@@ -57,8 +58,20 @@ contract DeployFraxlend is Script {
         );
         console.log("Fraxlend Pair Address %s", _fraxlendPairAddress);
 
-        FraxlendLenderHelpers _helpers = new FraxlendLenderHelpers(
-            _fraxlendPairAddress
+        bytes32 salt = keccak256(abi.encodePacked("MY_UNIQUE_SALT"));
+        address predictableAddress = Create2.computeAddress(
+            salt,
+            keccak256(
+                abi.encodePacked(
+                    type(FraxlendLenderHelpers).creationCode,
+                    abi.encode(0x689087338CFbD1D268AD361F7759Fb1200c921e2)
+                )
+            )
+        );
+
+        // Deploy
+        FraxlendLenderHelpers _helpers = new FraxlendLenderHelpers{salt: salt}(
+            predictableAddress
         );
 
         console.log("Helpers address: %s", address(_helpers));
