@@ -200,7 +200,7 @@ contract FraxlendLenderHelpers {
         uint256 _amount,
         address _receiver,
         address _owner
-    ) internal returns (uint256 _amountToReturn) {
+    ) internal returns (uint256 _sharesToBurn) {
         require(_owner == msg.sender, "Owner and Sender must be identical");
         // address _tokenAddress = fraxlend_pair_address_to_erc20_address[_contractAddress];
         IFraxlendPair _FraxlendPair = getFraxlendPair();
@@ -208,16 +208,16 @@ contract FraxlendLenderHelpers {
         uint256 _withdrawStakedTokenAmount = _MinterRedeemer.previewWithdraw(
             _amount
         );
-        uint256 _withdrawFraxlendShareAmount = _FraxlendPair.previewWithdraw(
+        _sharesToBurn = _FraxlendPair.previewWithdraw(
             _withdrawStakedTokenAmount
         );
         uint256 _amountToReturnSfrxUsd = _FraxlendPair.redeem(
-            _withdrawFraxlendShareAmount,
+            _sharesToBurn,
             address(this),
             _owner
         );
         if (_amountToReturnSfrxUsd > 0) {
-            _amountToReturn = approveAndRedeemSfrxUsd(
+            uint256 _amountToReturn = approveAndRedeemSfrxUsd(
                 _amountToReturnSfrxUsd,
                 _receiver
             );
@@ -264,7 +264,9 @@ contract FraxlendLenderHelpers {
         return getFraxlendPair().allowance(owner, spender);
     }
 
+    // This doesn't work...
     function approve(address spender, uint256 amount) external returns (bool) {
+        revert("Can't approve indirectly");
         return getFraxlendPair().approve(spender, amount);
     }
 
@@ -638,11 +640,14 @@ contract FraxlendLenderHelpers {
     }
 
     // TODO: Change return to match withdrawAndConvert info
+    // User must approve this contract to transfer Fraxlend shares on their behalf:
+    // uint256 allowed = allowance(_owner, msg.sender);
     function withdraw(
         uint256 _amount,
         address _receiver,
         address _owner
     ) external returns (uint256 _sharesToBurn) {
+        require(_owner == msg.sender, "Owner and Sender must be identical");
         _sharesToBurn = withdrawAndConvert(_amount, _receiver, _owner);
     }
 

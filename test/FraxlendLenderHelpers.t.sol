@@ -34,7 +34,7 @@ contract FraxLendYieldTokenHelpersTest is Test {
         bytes memory config_data = abi.encode(
             sfrxusd_address,
             sfrxeth_address,
-            0x42805079ed5ff38c0A5A47F38c83F96d348609AA,
+            0xa36a19e0aE3A91D886Fc9d0914FC88a6CBF7e7f2,
             5000,
             rate_contract_address,
             1582470460,
@@ -102,4 +102,93 @@ contract FraxLendYieldTokenHelpersTest is Test {
         );
         vm.stopPrank();
     }
+
+    function testRPS() public {
+        vm.startPrank(user_address);
+
+        IFraxlendPair _FraxlendPair = IFraxlendPair(fraxlend_pair_address);
+        IERC20(sfrxusd_address).approve(address(_FraxlendPair), 1000 ether);
+        _FraxlendPair.deposit(100 ether, user_address);
+        FraxlendLenderHelpers _Helpers = FraxlendLenderHelpers(helpers_address);
+        (
+            uint32 _lastBlock,
+            uint32 _feeToProtocolRate,
+            uint64 _lastTimestamp,
+            uint64 _ratePerSec,
+            uint64 _fullUtilizationRate
+        ) = _Helpers.currentRateInfo();
+
+        (
+            uint32 _FraxlendDirectlastBlock,
+            uint32 _FraxlendDirectfeeToProtocolRate,
+            uint64 _FraxlendDirectlastTimestamp,
+            uint64 _FraxlendDirectratePerSec,
+            uint64 _FraxlendDirectfullUtilizationRate
+        ) = _FraxlendPair.currentRateInfo();
+
+        uint256 pricePerShare = _Helpers.pricePerShare();
+        assertTrue(
+            _ratePerSec > _FraxlendDirectratePerSec,
+            "RPS math is definitely broken"
+        );
+        vm.stopPrank();
+    }
+
+    function testDeposit() public {
+        vm.startPrank(user_address);
+
+        FraxlendLenderHelpers _Helpers = FraxlendLenderHelpers(helpers_address);
+        IERC20(frxusd_address).approve(address(_Helpers), 100 ether);
+        uint256 _sharesReceived = _Helpers.deposit(100 ether, user_address);
+        console.log("Shares Received: %d", _sharesReceived);
+        uint256 fraxlendBalance = _Helpers.balanceOf(user_address);
+        console.log("Fraxlend Balance: %d", fraxlendBalance);
+
+        vm.stopPrank();
+    }
+
+    function testFraxlendPairState() public {
+        vm.startPrank(0x31562ae726AFEBe25417df01bEdC72EF489F45b3);
+
+        IFraxlendPair _FraxlendPair = IFraxlendPair(fraxlend_pair_address);
+        console.log("interest paused? %s", _FraxlendPair.isInterestPaused());
+
+        vm.stopPrank();
+    }
+
+    function testWithdrawDirect() public {
+        // Deposit 100 ether of frxUSD
+        testDeposit();
+
+        vm.startPrank(user_address);
+        IFraxlendPair _FraxlendPair = IFraxlendPair(fraxlend_pair_address);
+        _FraxlendPair.approve(address(_FraxlendPair), 100 ether);
+        uint256 _sharesToBurn = _FraxlendPair.withdraw(
+            100 ether,
+            user_address,
+            user_address
+        );
+
+        console.log("Shares to burn: %d", _sharesToBurn);
+
+        vm.stopPrank();
+    }
+
+    // function testWithdraw() public {
+    //     // Deposit 100 ether of frxUSD
+    //     testDeposit();
+
+    //     vm.startPrank(user_address);
+    //     FraxlendLenderHelpers _Helpers = FraxlendLenderHelpers(helpers_address);
+    //     _Helpers.approve(address(_Helpers), 100 ether);
+    //     uint256 _sharesToBurn = _Helpers.withdraw(
+    //         100 ether,
+    //         user_address,
+    //         user_address
+    //     );
+
+    //     console.log("Shares to burn: %d", _sharesToBurn);
+
+    //     vm.stopPrank();
+    // }
 }
