@@ -479,6 +479,10 @@ contract FraxlendLenderHelpers {
         return getFraxlendPair().name();
     }
 
+    function collateralContract() external view returns (address) {
+        return getFraxlendPair().collateralContract();
+    }
+
     function previewAddInterest()
         external
         view

@@ -2,14 +2,13 @@
 pragma solidity ^0.8.13;
 
 import {Script, console} from "../lib/forge-std/src/Script.sol";
-import {FraxLendYieldTokenHelpers} from "../src/FraxlendYieldTokenHelpers.sol";
+import {FraxlendLenderHelpers} from "../src/FraxlendLenderHelpers.sol";
 import {IERC20} from "../lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
 import {IFraxlendPairDeployer} from "../src/interfaces/IFraxlendPairDeployer.sol";
 import {IFraxlendPair} from "../src/interfaces/IFraxlendPair.sol";
 import {StdUtils} from "../lib/forge-std/src/StdUtils.sol";
 
 contract DeployFraxlend is Script {
-    FraxLendYieldTokenHelpers public yieldtokenhelpers;
     uint256 public localFork;
     address public whale_address = 0xD58E3fCec6f337b9AAB2ed6afA076067C9e35df1;
     address public frxusd_address = 0xFc00000000000000000000000000000000000001;
@@ -29,11 +28,11 @@ contract DeployFraxlend is Script {
         // vm.selectFork(0);
         address deployer = 0x31562ae726AFEBe25417df01bEdC72EF489F45b3;
         vm.startBroadcast(deployer);
-        yieldtokenhelpers = new FraxLendYieldTokenHelpers();
-        console.log(
-            "YieldTokenHelpers Address: %s",
-            address(yieldtokenhelpers)
-        );
+        // yieldtokenhelpers = new FraxLendYieldTokenHelpers();
+        // console.log(
+        //     "YieldTokenHelpers Address: %s",
+        //     address(yieldtokenhelpers)
+        // );
 
         // vm.broadcast(deployer);
         IFraxlendPairDeployer _FraxlendPairDeployer = IFraxlendPairDeployer(
@@ -57,6 +56,12 @@ contract DeployFraxlend is Script {
             config_data
         );
         console.log("Fraxlend Pair Address %s", _fraxlendPairAddress);
+
+        FraxlendLenderHelpers _helpers = new FraxlendLenderHelpers(
+            _fraxlendPairAddress
+        );
+
+        console.log("Helpers address: %s", address(_helpers));
 
         vm.stopBroadcast();
     }
