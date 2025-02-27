@@ -148,47 +148,41 @@ contract FraxLendYieldTokenHelpersTest is Test {
     }
 
     function testFraxlendPairState() public {
+        testDeposit();
+
         vm.startPrank(0x31562ae726AFEBe25417df01bEdC72EF489F45b3);
 
         IFraxlendPair _FraxlendPair = IFraxlendPair(fraxlend_pair_address);
         console.log("interest paused? %s", _FraxlendPair.isInterestPaused());
-
+        console.log(
+            "Helpers Balance: %d",
+            _FraxlendPair.balanceOf(helpers_address)
+        );
+        console.log("User Balance: %d", _FraxlendPair.balanceOf(user_address));
+        console.log("Get total assets: %d", _FraxlendPair.totalAssets());
         vm.stopPrank();
     }
 
-    function testWithdrawDirect() public {
+    function testWithdraw() public {
         // Deposit 100 ether of frxUSD
         testDeposit();
 
         vm.startPrank(user_address);
+        FraxlendLenderHelpers _Helpers = FraxlendLenderHelpers(helpers_address);
         IFraxlendPair _FraxlendPair = IFraxlendPair(fraxlend_pair_address);
-        _FraxlendPair.approve(address(_FraxlendPair), 100 ether);
-        uint256 _sharesToBurn = _FraxlendPair.withdraw(
-            100 ether,
+
+        _FraxlendPair.approve(address(_Helpers), 100 ether);
+        uint256 _maxWithdrawable = _Helpers.maxWithdraw(user_address);
+        uint256 _sharesToBurn = _Helpers.withdraw(
+            _maxWithdrawable,
             user_address,
             user_address
         );
 
-        console.log("Shares to burn: %d", _sharesToBurn);
+        uint256 _fraxlendPairEndBalance = _Helpers.balanceOf(user_address);
+
+        assertApproxEqAbs(_fraxlendPairEndBalance, 0, 10000);
 
         vm.stopPrank();
     }
-
-    // function testWithdraw() public {
-    //     // Deposit 100 ether of frxUSD
-    //     testDeposit();
-
-    //     vm.startPrank(user_address);
-    //     FraxlendLenderHelpers _Helpers = FraxlendLenderHelpers(helpers_address);
-    //     _Helpers.approve(address(_Helpers), 100 ether);
-    //     uint256 _sharesToBurn = _Helpers.withdraw(
-    //         100 ether,
-    //         user_address,
-    //         user_address
-    //     );
-
-    //     console.log("Shares to burn: %d", _sharesToBurn);
-
-    //     vm.stopPrank();
-    // }
 }
