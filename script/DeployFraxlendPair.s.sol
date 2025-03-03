@@ -59,22 +59,18 @@ contract DeployFraxlend is Script {
         console.log("Fraxlend Pair Address %s", _fraxlendPairAddress);
 
         bytes32 salt = keccak256(abi.encodePacked("MY_UNIQUE_SALT"));
+        bytes memory bytecode = abi.encodePacked(
+            type(FraxlendLenderHelpers).creationCode,
+            abi.encode(0x689087338CFbD1D268AD361F7759Fb1200c921e2)
+        );
         address predictableAddress = Create2.computeAddress(
             salt,
-            keccak256(
-                abi.encodePacked(
-                    type(FraxlendLenderHelpers).creationCode,
-                    abi.encode(0x689087338CFbD1D268AD361F7759Fb1200c921e2)
-                )
-            )
+            keccak256(bytecode)
         );
 
-        // Deploy
-        FraxlendLenderHelpers _helpers = new FraxlendLenderHelpers{salt: salt}(
-            predictableAddress
-        );
+        address _helpersAddress = Create2.deploy(0, salt, bytecode);
 
-        console.log("Helpers address: %s", address(_helpers));
+        console.log("Helpers address: %s", _helpersAddress);
 
         vm.stopBroadcast();
     }

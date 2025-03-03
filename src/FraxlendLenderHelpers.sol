@@ -9,10 +9,12 @@ pragma solidity >=0.8.19;
 // TODO: It might make sense to just infinite approve everything on creation. That could result in significant gas savings.
 
 contract FraxlendLenderHelpers {
-    address private fraxlendPairAddress; // Needs to be first to ensure memory alignment with FraxlendYieldTokenProxy
+    address public fraxlendPairAddress; // Needs to be first to ensure memory alignment with FraxlendYieldTokenProxy
+    IFraxlendPair public FraxlendPair;
 
-    constructor(address _fraxlendPairAddress) {
-        fraxlendPairAddress = _fraxlendPairAddress;
+    constructor(address FraxlendPairAddress) {
+        fraxlendPairAddress = FraxlendPairAddress;
+        FraxlendPair = IFraxlendPair(FraxlendPairAddress);
     }
 
     struct VaultAccount {
@@ -21,38 +23,38 @@ contract FraxlendLenderHelpers {
     }
 
     function RATE_PRECISION() external view returns (uint256) {
-        return getFraxlendPair().RATE_PRECISION();
+        return FraxlendPair.RATE_PRECISION();
     }
 
     function DEVIATION_PRECISION() external view returns (uint256) {
-        return getFraxlendPair().DEVIATION_PRECISION();
+        return FraxlendPair.DEVIATION_PRECISION();
     }
 
     function EXCHANGE_PRECISION() external view returns (uint256) {
-        return getFraxlendPair().DEVIATION_PRECISION();
+        return FraxlendPair.DEVIATION_PRECISION();
     }
 
     function FEE_PRECISION() external view returns (uint256) {
-        return getFraxlendPair().FEE_PRECISION();
+        return FraxlendPair.FEE_PRECISION();
     }
 
     function LIQ_PRECISION() external view returns (uint256) {
-        return getFraxlendPair().LIQ_PRECISION();
+        return FraxlendPair.LIQ_PRECISION();
     }
 
     function LTV_PRECISION() external view returns (uint256) {
-        return getFraxlendPair().LTV_PRECISION();
+        return FraxlendPair.LTV_PRECISION();
     }
 
     function MAX_PROTOCOL_FEE() external view returns (uint256) {
-        return getFraxlendPair().MAX_PROTOCOL_FEE();
+        return FraxlendPair.MAX_PROTOCOL_FEE();
     }
 
     function UTIL_PREC() external view returns (uint256) {
-        return getFraxlendPair().UTIL_PREC();
+        return FraxlendPair.UTIL_PREC();
     }
 
-    function getFraxlendPairAddress() internal view returns (address) {
+    function getFraxlendPairAddress() public view returns (address) {
         return fraxlendPairAddress;
     }
 
@@ -98,10 +100,6 @@ contract FraxlendLenderHelpers {
         returns (IERC20 SfrxUsdContract)
     {
         return IERC20(getFrxUsdAddress());
-    }
-
-    function getFraxlendPair() internal view returns (IFraxlendPair pair) {
-        return IFraxlendPair(getFraxlendPairAddress());
     }
 
     // TODO: Actually generate a specific MinterRedeemer Interface so I have access to all methods.
@@ -178,7 +176,6 @@ contract FraxlendLenderHelpers {
         uint256 _amount,
         address _receiver
     ) internal returns (uint256 _sharesReceived) {
-        IFraxlendPair _FraxlendPair = getFraxlendPair();
         IERC20 _SfrxUsdContract = getSfrxUsdContract();
         IERC20 _FrxUsdContract = getFrxUsdContract();
 
@@ -188,9 +185,9 @@ contract FraxlendLenderHelpers {
         // Send staked tokens to this contract
         uint256 _sfrxUsdAmount = approveAndMintSfrxUsd(_amount, address(this));
         if (_sfrxUsdAmount > 0) {
-            _SfrxUsdContract.approve(address(_FraxlendPair), _sfrxUsdAmount);
+            _SfrxUsdContract.approve(address(FraxlendPair), _sfrxUsdAmount);
             // send FraxLend tokens directly to user
-            _sharesReceived = _FraxlendPair.deposit(_sfrxUsdAmount, _receiver);
+            _sharesReceived = FraxlendPair.deposit(_sfrxUsdAmount, _receiver);
         }
     }
 
@@ -203,15 +200,14 @@ contract FraxlendLenderHelpers {
     ) internal returns (uint256 _sharesToBurn) {
         require(_owner == msg.sender, "Owner and Sender must be identical");
         // address _tokenAddress = fraxlend_pair_address_to_erc20_address[_contractAddress];
-        IFraxlendPair _FraxlendPair = getFraxlendPair();
         IFraxtalERC4626MintRedeemer _MinterRedeemer = getMinterRedeemer();
         uint256 _withdrawStakedTokenAmount = _MinterRedeemer.previewWithdraw(
             _amount
         );
-        _sharesToBurn = _FraxlendPair.previewWithdraw(
+        _sharesToBurn = FraxlendPair.previewWithdraw(
             _withdrawStakedTokenAmount
         );
-        uint256 _amountToReturnSfrxUsd = _FraxlendPair.redeem(
+        uint256 _amountToReturnSfrxUsd = FraxlendPair.redeem(
             _sharesToBurn,
             address(this),
             _owner
@@ -227,8 +223,7 @@ contract FraxlendLenderHelpers {
     function transferAndApproveCollateral(
         uint256 _collateralAmount
     ) internal returns (bool) {
-        IFraxlendPair _FraxlendPair = getFraxlendPair();
-        IERC20 _CollateralContract = IERC20(_FraxlendPair.collateralContract());
+        IERC20 _CollateralContract = IERC20(FraxlendPair.collateralContract());
         _CollateralContract.transferFrom(
             msg.sender,
             address(this),
@@ -236,7 +231,7 @@ contract FraxlendLenderHelpers {
         );
         return
             _CollateralContract.approve(
-                address(_FraxlendPair),
+                address(FraxlendPair),
                 _collateralAmount
             );
     }
@@ -253,7 +248,7 @@ contract FraxlendLenderHelpers {
     //     )
     // {
     //     (_interestEarned, _feesAmount, _feesShare, _currentRateInfo, _totalAsset, _totalBorrow) =
-    //         getFraxlendPair().addInterest(_returnAccounting);
+    //         FraxlendPair.addInterest(_returnAccounting);
     // }
 
     // This is for the yFraxlendPair token, so we forward to the pair
@@ -261,13 +256,13 @@ contract FraxlendLenderHelpers {
         address owner,
         address spender
     ) external view returns (uint256) {
-        return getFraxlendPair().allowance(owner, spender);
+        return FraxlendPair.allowance(owner, spender);
     }
 
     // This doesn't work...
     function approve(address spender, uint256 amount) external returns (bool) {
         revert("Can't approve indirectly");
-        return getFraxlendPair().approve(spender, amount);
+        return FraxlendPair.approve(spender, amount);
     }
 
     function asset() external view returns (address) {
@@ -275,13 +270,13 @@ contract FraxlendLenderHelpers {
     }
 
     function balanceOf(address account) external view returns (uint256) {
-        return getFraxlendPair().balanceOf(account);
+        return FraxlendPair.balanceOf(account);
     }
 
     function convertToAssets(
         uint256 _shares
     ) external view returns (uint256 _assets) {
-        uint256 _assetsSfrxUsd = getFraxlendPair().convertToAssets(_shares);
+        uint256 _assetsSfrxUsd = FraxlendPair.convertToAssets(_shares);
         _assets = previewRedeemSfrxUsd(_assetsSfrxUsd);
     }
 
@@ -289,7 +284,7 @@ contract FraxlendLenderHelpers {
         uint256 _assets
     ) external view returns (uint256 _shares) {
         uint256 _assetsSfrxUsd = previewDepositSfrxUsd(_assets);
-        _shares = getFraxlendPair().convertToShares(_assetsSfrxUsd);
+        _shares = FraxlendPair.convertToShares(_assetsSfrxUsd);
     }
 
     function currentRateInfo()
@@ -303,7 +298,6 @@ contract FraxlendLenderHelpers {
             uint64 _fullUtilizationRate
         )
     {
-        IFraxlendPair _FraxlendPair = getFraxlendPair();
         uint256 _rpsLentSfrxUsd;
         uint256 _fullUtilizationRateSfrxUSD;
         (
@@ -312,14 +306,14 @@ contract FraxlendLenderHelpers {
             _lastTimestamp,
             _rpsLentSfrxUsd,
             _fullUtilizationRateSfrxUSD
-        ) = _FraxlendPair.currentRateInfo();
+        ) = FraxlendPair.currentRateInfo();
         (
             uint128 _totalAssetAmount,
             ,
             uint128 _totalBorrowAmount,
             ,
 
-        ) = _FraxlendPair.getPairAccounting();
+        ) = FraxlendPair.getPairAccounting();
         uint256 _lent_rps = (_rpsLentSfrxUsd * _totalBorrowAmount) /
             _totalAssetAmount;
         uint256 _uinlent_rps = (getSfrxUsdRPS() *
@@ -331,14 +325,14 @@ contract FraxlendLenderHelpers {
     }
 
     function decimals() external view returns (uint8) {
-        return getFraxlendPair().decimals();
+        return FraxlendPair.decimals();
     }
 
     function decreaseAllowance(
         address spender,
         uint256 subtractedValue
     ) external returns (bool) {
-        return getFraxlendPair().decreaseAllowance(spender, subtractedValue);
+        return FraxlendPair.decreaseAllowance(spender, subtractedValue);
     }
 
     function deposit(
@@ -349,7 +343,7 @@ contract FraxlendLenderHelpers {
     }
 
     function depositLimit() external view returns (uint256) {
-        uint256 _depositLimitSfrxUsd = getFraxlendPair().depositLimit();
+        uint256 _depositLimitSfrxUsd = FraxlendPair.depositLimit();
         return previewRedeemSfrxUsd(_depositLimitSfrxUsd);
     }
 
@@ -372,7 +366,7 @@ contract FraxlendLenderHelpers {
             _lastTimestamp,
             _lowExchangeRateSfrxUsd,
             _highExchangeRateSfrxUsd
-        ) = getFraxlendPair().exchangeRateInfo();
+        ) = FraxlendPair.exchangeRateInfo();
         _lowExchangeRate = previewConvertSfrxUsd(_lowExchangeRateSfrxUsd);
         _highExchangeRate = previewConvertSfrxUsd(_highExchangeRateSfrxUsd);
     }
@@ -400,7 +394,7 @@ contract FraxlendLenderHelpers {
             _DEVIATION_PRECISION,
             _RATE_PRECISION,
             _MAX_PROTOCOL_FEE
-        ) = getFraxlendPair().getConstants();
+        ) = FraxlendPair.getConstants();
     }
 
     function getUserSnapshot(
@@ -414,7 +408,7 @@ contract FraxlendLenderHelpers {
             uint256 _userCollateralBalance
         )
     {
-        return getFraxlendPair().getUserSnapshot(_address);
+        return FraxlendPair.getUserSnapshot(_address);
     }
 
     function getPairAccounting()
@@ -436,7 +430,7 @@ contract FraxlendLenderHelpers {
             _totalBorrowAmountSfrxUsd,
             _totalBorrowShares,
             _totalCollateral
-        ) = getFraxlendPair().getPairAccounting();
+        ) = FraxlendPair.getPairAccounting();
         _totalAssetAmount = uint128(
             previewConvertSfrxUsd(_totalAssetAmountSfrxUsd)
         );
@@ -448,39 +442,39 @@ contract FraxlendLenderHelpers {
     function maxDeposit(
         address _receiver
     ) external view returns (uint256 _maxAssets) {
-        uint256 maxAssetsSfrxUsd = getFraxlendPair().maxDeposit(_receiver);
+        uint256 maxAssetsSfrxUsd = FraxlendPair.maxDeposit(_receiver);
         _maxAssets = previewMintSfrxUsd(maxAssetsSfrxUsd);
     }
 
     function maxLTV() external view returns (uint256) {
-        return getFraxlendPair().maxLTV();
+        return FraxlendPair.maxLTV();
     }
 
     function maxMint(
         address _receiver
     ) external view returns (uint256 _maxShares) {
-        _maxShares = getFraxlendPair().maxMint(_receiver);
+        _maxShares = FraxlendPair.maxMint(_receiver);
     }
 
     function maxRedeem(
         address _owner
     ) external view returns (uint256 _maxShares) {
-        _maxShares = getFraxlendPair().maxRedeem(_owner);
+        _maxShares = FraxlendPair.maxRedeem(_owner);
     }
 
     function maxWithdraw(
         address _owner
     ) external view returns (uint256 _maxAssets) {
-        uint256 _maxWithdrawSfrxUsd = getFraxlendPair().maxWithdraw(_owner);
+        uint256 _maxWithdrawSfrxUsd = FraxlendPair.maxWithdraw(_owner);
         _maxAssets = previewRedeemSfrxUsd(_maxWithdrawSfrxUsd);
     }
 
     function name() external view returns (string memory) {
-        return getFraxlendPair().name();
+        return FraxlendPair.name();
     }
 
     function collateralContract() external view returns (address) {
-        return getFraxlendPair().collateralContract();
+        return FraxlendPair.collateralContract();
     }
 
     function previewAddInterest()
@@ -502,20 +496,20 @@ contract FraxlendLenderHelpers {
         uint256 _assets
     ) external view returns (uint256 _sharesReceived) {
         uint256 _assetsSfrxUsd = previewDepositSfrxUsd(_assets);
-        _sharesReceived = getFraxlendPair().previewDeposit(_assetsSfrxUsd);
+        _sharesReceived = FraxlendPair.previewDeposit(_assetsSfrxUsd);
     }
 
     function previewMint(
         uint256 _shares
     ) external view returns (uint256 _amount) {
-        uint256 _amountSfrxUsd = getFraxlendPair().previewMint(_shares);
+        uint256 _amountSfrxUsd = FraxlendPair.previewMint(_shares);
         _amount = previewMintSfrxUsd(_amountSfrxUsd);
     }
 
     function previewRedeem(
         uint256 _shares
     ) external view returns (uint256 _assets) {
-        uint256 assetsSfrxUsd = getFraxlendPair().previewRedeem(_shares);
+        uint256 assetsSfrxUsd = FraxlendPair.previewRedeem(_shares);
         _assets = previewRedeemSfrxUsd(assetsSfrxUsd);
     }
 
@@ -523,15 +517,15 @@ contract FraxlendLenderHelpers {
         uint256 _amount
     ) external view returns (uint256 _sharesToBurn) {
         uint256 _amountSfrxUsd = previewDepositSfrxUsd(_amount);
-        _sharesToBurn = getFraxlendPair().previewWithdraw(_amountSfrxUsd);
+        _sharesToBurn = FraxlendPair.previewWithdraw(_amountSfrxUsd);
     }
 
     function pricePerShare() external view returns (uint256 _amount) {
-        _amount = previewConvertSfrxUsd(getFraxlendPair().pricePerShare());
+        _amount = previewConvertSfrxUsd(FraxlendPair.pricePerShare());
     }
 
     function rateContract() external view returns (address) {
-        return getFraxlendPair().rateContract();
+        return FraxlendPair.rateContract();
     }
 
     // User must approve this contract to transfer Fraxlend shares on their behalf:
@@ -546,14 +540,12 @@ contract FraxlendLenderHelpers {
             _owner == msg.sender,
             "Owner and sender must be identical to prevent fund stealing."
         );
-        IFraxlendPair _FraxlendPair = getFraxlendPair();
-
         // Redeem requires (msg.sender == owner), so this contract needs to hold the assets
-        _FraxlendPair.transferFrom(_owner, address(this), _shares);
+        FraxlendPair.transferFrom(_owner, address(this), _shares);
 
         // Approve Fraxlend
-        getSfrxUsdContract().approve(address(_FraxlendPair), _shares);
-        uint256 _amountToReturnSfrxUsd = getFraxlendPair().redeem(
+        getSfrxUsdContract().approve(address(FraxlendPair), _shares);
+        uint256 _amountToReturnSfrxUsd = FraxlendPair.redeem(
             _shares,
             address(this),
             address(this)
@@ -566,7 +558,7 @@ contract FraxlendLenderHelpers {
 
     // TODO: Decide how to change this for ease of access
     function symbol() external view returns (string memory) {
-        return getFraxlendPair().symbol();
+        return FraxlendPair.symbol();
     }
 
     function toAssetAmount(
@@ -574,7 +566,7 @@ contract FraxlendLenderHelpers {
         bool _roundUp,
         bool _previewInterest
     ) external view returns (uint256 _amount) {
-        uint256 _amountSfrxUsd = getFraxlendPair().toAssetAmount(
+        uint256 _amountSfrxUsd = FraxlendPair.toAssetAmount(
             _shares,
             _roundUp,
             _previewInterest
@@ -588,7 +580,7 @@ contract FraxlendLenderHelpers {
         bool _previewInterest
     ) external view returns (uint256 _shares) {
         uint256 _amountSfrxUsd = previewDepositSfrxUsd(_amount);
-        _shares = getFraxlendPair().toAssetShares(
+        _shares = FraxlendPair.toAssetShares(
             _amountSfrxUsd,
             _roundUp,
             _previewInterest
@@ -601,28 +593,28 @@ contract FraxlendLenderHelpers {
         returns (uint128 amount, uint128 shares)
     {
         uint128 _amountSfrxUSD;
-        (_amountSfrxUSD, shares) = getFraxlendPair().totalAsset();
+        (_amountSfrxUSD, shares) = FraxlendPair.totalAsset();
         amount = uint128(previewRedeemSfrxUsd(_amountSfrxUSD));
     }
 
     function totalAssets() external view returns (uint256) {
-        uint256 _amountSfrxUSD = getFraxlendPair().totalAssets();
+        uint256 _amountSfrxUSD = FraxlendPair.totalAssets();
         return previewRedeemSfrxUsd(_amountSfrxUSD);
     }
 
     function totalCollateral() external view returns (uint256) {
-        return getFraxlendPair().totalCollateral();
+        return FraxlendPair.totalCollateral();
     }
 
     // Returns shares
     function totalSupply() external view returns (uint256) {
-        return getFraxlendPair().totalSupply();
+        return FraxlendPair.totalSupply();
     }
 
     // Transfer functions transfer shares, as a result we inherit from FraxlendPair
     function transfer(address to, uint256 amount) external returns (bool) {
         require(1 == 0, "This method is not supported");
-        return getFraxlendPair().transfer(to, amount);
+        return FraxlendPair.transfer(to, amount);
     }
 
     // Transfer functions transfer shares, as a result we inherit from FraxlendPair
@@ -636,11 +628,9 @@ contract FraxlendLenderHelpers {
             msg.sender == from,
             "msg.sender and from address must be identical to prevent stealing funds"
         );
-        IFraxlendPair _FraxlendPair = getFraxlendPair();
-
         // Redeem requires (msg.sender == owner), so this contract needs to hold the assets
-        _FraxlendPair.transferFrom(from, address(this), amount);
-        return _FraxlendPair.transfer(to, amount);
+        FraxlendPair.transferFrom(from, address(this), amount);
+        return FraxlendPair.transfer(to, amount);
     }
 
     // TODO: Change return to match withdrawAndConvert info
