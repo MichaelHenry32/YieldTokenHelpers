@@ -1,6 +1,7 @@
 import "./interfaces/IFraxlendPair.sol";
 import {IFraxtalERC4626MintRedeemer} from "./interfaces/IFraxtalERC4626MintRedeemer.sol";
 import {ISfrxUsdFrxUsdOracle} from "./interfaces/ISfrxUsdFrxUsdOracle.sol";
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -8,13 +9,22 @@ pragma solidity >=0.8.19;
 
 // TODO: It might make sense to just infinite approve everything on creation. That could result in significant gas savings.
 
-contract FraxlendLenderHelpers {
+contract FraxlendLenderHelpers is Initializable {
     address public fraxlendPairAddress; // Needs to be first to ensure memory alignment with FraxlendYieldTokenProxy
     IFraxlendPair public FraxlendPair;
 
     constructor(address FraxlendPairAddress) {
         fraxlendPairAddress = FraxlendPairAddress;
         FraxlendPair = IFraxlendPair(FraxlendPairAddress);
+    }
+
+    function initialize(address _fraxlendPairAddress) public initializer {
+        require(
+            _fraxlendPairAddress != address(0),
+            "FraxlendPairAddress must be set"
+        );
+        fraxlendPairAddress = _fraxlendPairAddress;
+        FraxlendPair = IFraxlendPair(fraxlendPairAddress);
     }
 
     struct VaultAccount {
@@ -257,12 +267,6 @@ contract FraxlendLenderHelpers {
         address spender
     ) external view returns (uint256) {
         return FraxlendPair.allowance(owner, spender);
-    }
-
-    // This doesn't work...
-    function approve(address spender, uint256 amount) external returns (bool) {
-        revert("Can't approve indirectly");
-        return FraxlendPair.approve(spender, amount);
     }
 
     function asset() external view returns (address) {
