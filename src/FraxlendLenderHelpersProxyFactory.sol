@@ -9,7 +9,6 @@ pragma solidity ^0.8.0;
 contract FraxlendLenderHelpersProxyFactory is Ownable {
     using Clones for address;
     address private implementation;
-    mapping(address => address) pairToHelperMap;
 
     struct PairHelper {
         address helper;
@@ -38,5 +37,13 @@ contract FraxlendLenderHelpersProxyFactory is Ownable {
         pairHelpers.push(
             PairHelper({helper: _clone, pair: _fraxlendPairAddress})
         );
+    }
+
+    function getAllHelperAddresses()
+        external
+        view
+        returns (PairHelper[] memory _deployedPairs)
+    {
+        _deployedPairs = pairHelpers;
     }
 }

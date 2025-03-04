@@ -68,6 +68,8 @@ contract DeployFraxlend is Script {
                 _helpersAddress
             );
 
+        console.log("Proxy Factory Address: %s", address(_proxyFactory));
+
         bytes32 _cloneSalt = keccak256(
             abi.encodePacked(address(_proxyFactory))
         );
