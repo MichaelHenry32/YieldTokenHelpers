@@ -2,7 +2,7 @@
 
 import "@openzeppelin/contracts/proxy/Clones.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./FraxlendLenderHelpersProxy.sol";
+import "./FraxlendLenderHelpers.sol";
 
 pragma solidity ^0.8.0;
 
@@ -33,7 +33,7 @@ contract FraxlendLenderHelpersProxyFactory is Ownable {
         bytes32 salt
     ) external payable onlyOwner returns (address _clone) {
         _clone = Clones.cloneDeterministic(implementation, salt);
-        FraxlendLenderHelpersProxy(_clone).initialize(_fraxlendPairAddress);
+        FraxlendLenderHelpers(_clone).initialize(_fraxlendPairAddress);
         pairHelpers.push(
             PairHelper({helper: _clone, pair: _fraxlendPairAddress})
         );
